@@ -113,7 +113,7 @@ model if they map to the same equivalence class.
 What should we take away from this? Well the solver is telling us that there is
 a counterexample to our erroneous claim. It's saying that there is some
 uninterpreted sort with at least three distinct elements
-$x = \{1,2,7\}, y = \{3,5\}, z = \{0,4,6\}$ and a unary function $f$ such that
+$x = \\{1,2,7\\}, y = \\{3,5\\}, z = \\{0,4,6\\}$ and a unary function $f$ such that
 the premises $f(x) = y, f(y) = z,$ and $f(z) = x$ are satisfied however the
 conclusion $f^3(x) = y$ does not hold. From the model, we can read off that
 $x = f(z) = f(f(f(x))), y = f(x), z = f(y) = f(f(x))$
