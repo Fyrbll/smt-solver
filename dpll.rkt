@@ -3,7 +3,7 @@
 (require racket/match racket/set racket/function racket/list racket/string)
 (provide (all-defined-out))
 
-(define debug #t)
+(define debug #f)
 
 (define (log s)
   (when debug (displayln s)))

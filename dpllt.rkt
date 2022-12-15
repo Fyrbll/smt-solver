@@ -79,7 +79,7 @@
          (formula (cnf formula)))
     (log (hash-map literal->term (lambda (literal term)
                                    (list literal '<=> term))))
-    (get-model^ term->literal literal->term formula #f)))
+    (get-model^ term->literal literal->term formula #t)))
 
 (define (tlearn t->l l->t state backjump?)
   (let*-values
