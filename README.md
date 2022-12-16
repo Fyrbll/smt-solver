@@ -11,23 +11,18 @@ Usage
 
 ```
 $ racket -I racket/repl
+
 Welcome to Racket v8.7.0.6 [cs].
+
 > ,enter "dpllt.rkt"
+
 "dpllt.rkt"> (main "./input-1.smt2")
-((1 <=> (= (f a b) a)) (2 <=> (= (f (f a b) b) a)))
-__initial__        ()
-__pure-literal__   -1 2
-(list (cons 'b (set 1)) (cons '(f a b) (set 2)) (cons '(f (f a b) b) (set 0 3))
-(cons 'a (set 0 3)))
+(list (cons 'b (set 1))
+      (cons '(f a b) (set 2))
+      (cons '(f (f a b) b) (set 0 3))
+      (cons 'a (set 0 3)))
+
 "dpllt.rkt"> (main "./input-2.smt2")
-((1 <=> (= (f a b) a)) (2 <=> (= (f (f a b) b) a)))
-__initial__        ()
-__pure-literal__   -2 1
-__tlearn__         (2 -1)
-__restart__
-__initial__        ()
-__unit-propagate__ 1
-__unit-propagate__ 2 1
 #f
 ```
 
@@ -121,7 +116,84 @@ $x = f(z) = f(f(f(x))), y = f(x), z = f(y) = f(f(x))$
 Implementation Walkthrough
 --------------------------
 
-TODO
+Here is a description of the implementation.
+
+1. Assertions are read from the input file. The input file has the grammar
+
+```
+INPUT ::= ASSERTION*
+
+ASSERTION ::= (assert FORMULA)
+
+FORMULA ::= (= TERM TERM)
+          | (and FORMULA FORMULA+)
+          | (or FORMULA FORMULA+)
+          | (not FORMULA FORMULA+)
+          | (=> FORMULA FORMULA+)
+
+TERM ::= VARIABLE
+       | (VARIABLE TERM+)
+```
+
+2. The program produces a bijection from a subset of the natural numbers to
+equalities. So, if the program contains just the equalities $f(a,b) = a$ and
+$f(f(a,b),b) = a$, then the program will produce two hash tables.
+
+$$\text{literal->term}\ = \\{ 1 \mapsto (f(a,b) = a), 2 \mapsto (f(f(a,b),b) = a) \\}$$
+
+$$\text{term->literal}\ = \\{ (f(a,b) = a) \mapsto 1, (f(f(a,b),b) = a) \mapsto 2 \\}$$
+
+Here is a commented version of the function `main` from `dpllt.rkt`, which is
+the entry point to the solver.
+
+```
+(define (main path)
+  (let* (
+         ;; the following three lines read all the s-expressions in the input
+         ;; file and store them in the variable 'assertions'
+         (in-port (open-input-file path))
+         (assertions (port->list read in-port))
+         (_ (close-input-port in-port))
+
+         ;; we remove the 'assert' enclosing each assertion in 'assertions'
+         ;; e.g. (assert (= x y)) --> (= x y)
+         ;; the results are stored in 'formulas'
+         (formulas (map (match-lambda
+                          ((list 'assert formula)
+                           formula)) assertions))
+
+
+         ;; 'terms' is the list of terms present across all the formulas
+         ;; mentioned in 'formulas,' how
+         (terms (append-map (lambda (formula)
+                              (collect-terms formula)) formulas))
+
+
+         ;; 
+         (term->literal (make-term->literal terms))
+
+         ;; since 'term->literal' is a one-to-one hash table, we can compute its
+         ;; inverse hash table
+         (literal->term (hash-invert term->literal))
+
+
+         (formulas (map (lambda (formula)
+                          (replace term->literal formula)) formulas))
+
+
+         (formula (if (> (length formulas) 1)
+                      (cons 'and formulas)
+                      (first formulas)))
+
+
+         (formula (cnf formula)))
+
+    ;; please ignore this it's for debugging purposes
+    (log (hash-map literal->term (lambda (literal term)
+                                   (list literal '<=> term))))
+
+    (get-model^ term->literal literal->term formula #t)))
+```
 
 References
 ----------
@@ -138,7 +210,6 @@ Derek C. Oppen.
 [1]:https://en.wikipedia.org/wiki/Conjunctive_normal_form
 [2]:https://dl.acm.org/doi/pdf/10.1145/1217856.1217859
 [3]:https://web.eecs.umich.edu/~weimerw/2011-6610/reading/nelson-oppen-congruence.pdf
-
 
 <!--
 (time (main "./input-5.smt2") (void))
