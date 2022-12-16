@@ -1,6 +1,19 @@
 Project for Advanced Functional Programming, Fall 2022
 ======================================================
 
+Dependencies
+------------
+
+I'm using the following Racket modules. I believe they're included in a standard
+installation of Racket so you shouldn't need to use `raco` at all.
+
+- racket/list
+- racket/match
+- racket/function
+- racket/set
+- racket/syntax
+- racket/string
+
 Usage
 -----
 
@@ -170,11 +183,16 @@ the model is not theory-consistent, a new clause (a disjunction of literals) is
 added to the formula based on the conflict. The SAT solver is then restarted.
 
 The following diagram presents the relationship between different functions in
-the solver. I have also mentioned which file is home to each function. Also
-"Yes" in most situations means "this transition rule applies to the state." In
-other situations it means "true." On the other hand "No" in most situations
-means "this transition rule does not apply," or it means "false." The meaning
-should be clear from context.
+the solver. I have also mentioned which file is home to each function.
+
+The label "Yes" in most situations means "this transition rule applies to the
+state." In other situations it means "true." On the other hand "No" in most
+situations means "this transition rule does not apply," or it means "false." The
+meaning should be clear from context.
+
+The steps `pure-literal`, `unit-propagate`, `decide`, `tlearn`, `backtrack`,
+`backjump`, and `fail` are explained in sections 2 and 3 of the
+"Solving SAT and SAT Modulo Theories" paper.
 
 ```
               (dpllt) main
@@ -189,7 +207,7 @@ should be clear from context.
          |       (dpll) |            /         ^
          |              V           V          | No
          |           get-model-guess           |
-         |      (dpllt) |                  backtrack/jump (dpll)
+         |      (dpllt) |               backjump/backtrack (dpll)
          |              |                      ^  |
          |              |                      |  | Yes
          |              V           Yes        |  V
@@ -204,6 +222,65 @@ should be clear from context.
           \--------- consistent? --------> output model, "sat"
                       (euf)
 ```
+
+A Closer Look
+-------------
+
+If you want to see exactly which transition rules are fired and how they change
+the model, change the value of `debug` in `dpll.rkt` to `#t`
+
+```
+#lang racket/base
+
+(require racket/match racket/set racket/function racket/list racket/string)
+(provide (all-defined-out))
+
+(define debug #t)
+
+;; ...
+```
+
+```
+Welcome to Racket v8.7.0.6 [cs].
+
+> ,enter "dpllt.rkt"
+
+"dpllt.rkt"> (main "./input-7.smt2")
+((1 <=> (= (f x) y))
+ (2 <=> (= (f y) z))
+ (3 <=> (= (f z) x))
+ (4 <=> (= (f (f (f (f (f (f x)))))) x)))
+__initial__        ()
+__pure-literal__   -4 3 2 1
+__tlearn__         (4 -3 -2 -1)
+__restart__
+__initial__        ()
+__unit-propagate__ 1
+__unit-propagate__ 2 1
+__unit-propagate__ 3 2 1
+__unit-propagate__ 4 3 2 1
+#f
+```
+
+Helpful and Limiting Aspects of Functional Programming 
+------------------------------------------------------
+
+1. I did not write the code in Haskell because I wanted to write a working
+solver first and *then* worry about the types. With code that involves state,
+especially code where you don't know exactly what information you should include
+in your state datatype, I think it's best to start with an approach that
+leverages global mutable state. When you're happy with the result, you can
+package all the necessary information into a type-safe struct. If I had more
+time to spend on the project I would add types gradually.
+
+2. I think immutable data structures might not be the right choice for fast SAT
+solving. My theory solver (in `euf.rkt`) mostly uses mutable state, while my SAT
+solver (in `dpll.rkt`) explicitly passes around an immutable state struct.
+Still, I think I perform a lot of expensive operations on immutable graphs to
+implement backjumping in my SAT solver. Specifically when I roll back a decision
+and the unit propagations associated with that level, I also roll back changes
+to my unit propagation graph. I ought to formally profile my tool to see where
+it spends the most time.
 
 References
 ----------
