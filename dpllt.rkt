@@ -2,7 +2,11 @@
 
 (require racket/match racket/set
          (rename-in racket/function (negate function-negate)) racket/list
-         racket/string racket/port "./cnf.rkt" "./dpll.rkt" "./euf.rkt")
+         racket/string racket/port "./cnf.rkt"
+         (only-in "./dpll.rkt" backjump backtrack decide fail unit-propagate 
+                  State State-model State-formula pretty-state pure-literal
+                  log)
+         "./euf.rkt")
 
 (define (make-term->literal terms (term->literal (hash)) (next-literal 1))
   (match terms
@@ -79,7 +83,7 @@
          (formula (cnf formula)))
     (log (hash-map literal->term (lambda (literal term)
                                    (list literal '<=> term))))
-    (get-model^ term->literal literal->term formula #t)))
+    (get-model term->literal literal->term formula #t)))
 
 (define (tlearn t->l l->t state backjump?)
   (let*-values
@@ -92,7 +96,7 @@
                             (hash-ref l->t literal)) positive-literals))
        ((inequalities) (map (lambda (literal)
                               (hash-ref l->t (- literal))) negative-literals))
-       ((consistency) (problem-initialize (list equalities inequalities))))
+       ((consistency) (consistent? (list equalities inequalities))))
     (match consistency
       ((list 'sat interpretation)
        interpretation)
@@ -106,62 +110,39 @@
               (formula (cons learned-lemma (State-formula state))))
          (log (format "__tlearn__         ~a" learned-lemma))
          (log (format "__restart__"))
-         (get-model^ t->l l->t formula backjump?))))))
+         (get-model t->l l->t formula backjump?))))))
 
-(define (get-model-check^ t->l l->t state backjump?)
+(define (get-model-check t->l l->t state backjump?)
   (let ((maybe-new-state ((if backjump? backjump backtrack) state)))
     (if maybe-new-state
         (let ((new-state maybe-new-state))
           (log (format "~a      ~a" 
                        (if backjump? "__backjump__ " "__backtrack__")
                        (pretty-state new-state)))
-          (get-model-check^ t->l l->t new-state backjump?))
+          (get-model-check t->l l->t new-state backjump?))
         (if (fail state)
             #f
-            (get-model-guess^ t->l l->t state backjump?)))))
+            (get-model-guess t->l l->t state backjump?)))))
 
-(define (get-model-guess^ t->l l->t state backjump?)
+(define (get-model-guess t->l l->t state backjump?)
   (let ((maybe-new-state (unit-propagate state)))
     (if maybe-new-state
         (let ((new-state maybe-new-state))
           (log (format "__unit-propagate__ ~a" (pretty-state new-state)))
-          (get-model-check^ t->l l->t new-state backjump?))
+          (get-model-check t->l l->t new-state backjump?))
         (let ((maybe-new-state (decide state)))
           (if maybe-new-state
               (let ((new-state maybe-new-state))
                 (log (format "__decide__         ~a" (pretty-state new-state)))
-                (get-model-check^ t->l l->t new-state backjump?))
+                (get-model-check t->l l->t new-state backjump?))
               (tlearn t->l l->t state backjump?))))))
 
-;;                       output #f
-;; get-model                 ^
-;;    |                      | Y
-;;    V                 N    |
-;; pure-literal     -------fail
-;;    |            /         ^
-;;    V           V          | N
-;; get-model-guess           |
-;;    |                  back(track/jump)
-;;    |                      ^  |
-;;    |                      |  | Y
-;;    V            Y         |  V
-;; unit-propagate ---> get-model-check
-;;    |                ^
-;;    | N           Y /
-;;    V              / 
-;; decide ----------/
-;;    |
-;;    | N
-;;    V
-;; output model
-;;
-;; get-model : Formula → Option Model
-(define (get-model^ t->l l->t formula (backjump? #f))
+(define (get-model t->l l->t formula (backjump? #f))
   (let* ((state (State '() (set) (hash) (set) formula))
          (maybe-new-state (pure-literal state)))
     (log (format "__initial__        ~a" '()))
     (if maybe-new-state
         (let ((new-state maybe-new-state))
           (log (format "__pure-literal__   ~a" (pretty-state new-state)))
-          (get-model-guess^ t->l l->t new-state backjump?))
-        (get-model-guess^ t->l l->t state backjump?))))
+          (get-model-guess t->l l->t new-state backjump?))
+        (get-model-guess t->l l->t state backjump?))))

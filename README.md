@@ -135,64 +135,74 @@ TERM ::= VARIABLE
        | (VARIABLE TERM+)
 ```
 
-2. The program produces a bijection from a subset of the natural numbers to
-equalities. So, if the program contains just the equalities $f(a,b) = a$ and
-$f(f(a,b),b) = a$, then the program will produce two hash tables.
+2. The program produces a bijection from a subset of the natural numbers greater
+than 0 to equalities. So, if the program contains just the equalities
+$f(a,b) = a$ and $f(f(a,b),b) = a$, then the program will produce two hash
+tables.
 
 $$\text{literal\\_to\\_term}\ = \\{ 1 \mapsto (f(a,b) = a), 2 \mapsto (f(f(a,b),b) = a) \\}$$
 
 $$\text{term\\_to\\_literal}\ = \\{ (f(a,b) = a) \mapsto 1, (f(f(a,b),b) = a) \mapsto 2 \\}$$
 
-Here is a commented version of the function `main` from `dpllt.rkt`, which is
-the entry point to the solver.
+Observe that I used the word 'literal' in the names of the hash tables. This is
+because each non-zero integer can be treated as a positive or negative boolean
+literal for the purposes of boolean satisfiability.
+
+3. The program replaces all the equalities with their corresponding boolean
+literals and also converts the formula to CNF. Note that this means we
+temporarily "forget" that the original problem was in the theory of
+uninterpreted functions.
+
+Say the original problem was
+
+$$(f(a,b) = a) \wedge (f(f(a,b),b) \neq a)$$
+
+it is transformed into the CNF satsifiability problem
+
+$$1 \wedge -2$$
+
+4. The program runs the SAT solver on this CNF formula. Once it generates a
+model, the model is transformed back into a conjunction of equalities and
+inequalities using the 'term_to_literal' hash table. The conjunction is run
+through the theory solver to check its consistency with respect to the theory of
+uninterpreted functions. If the model is theory-consistent, it is returned. If
+the model is not theory-consistent, a new clause (a disjunction of literals) is
+added to the formula based on the conflict. The SAT solver is then restarted.
+
+The following diagram presents the relationship between different functions in
+the solver. I have also mentioned which file is home to each function. Also
+"Yes" in most situations means "this transition rule applies to the state." In
+other situations it means "true." On the other hand "No" in most situations
+means "this transition rule does not apply," or it means "false." The meaning
+should be clear from context.
 
 ```
-(define (main path)
-  (let* (
-         ;; the following three lines read all the s-expressions in the input
-         ;; file and store them in the variable 'assertions'
-         (in-port (open-input-file path))
-         (assertions (port->list read in-port))
-         (_ (close-input-port in-port))
-
-         ;; we remove the 'assert' enclosing each assertion in 'assertions'
-         ;; e.g. (assert (= x y)) --> (= x y)
-         ;; the results are stored in 'formulas'
-         (formulas (map (match-lambda
-                          ((list 'assert formula)
-                           formula)) assertions))
-
-
-         ;; 'terms' is the list of terms present across all the formulas
-         ;; mentioned in 'formulas,' how
-         (terms (append-map (lambda (formula)
-                              (collect-terms formula)) formulas))
-
-
-         ;; 
-         (term->literal (make-term->literal terms))
-
-         ;; since 'term->literal' is a one-to-one hash table, we can compute its
-         ;; inverse hash table
-         (literal->term (hash-invert term->literal))
-
-
-         (formulas (map (lambda (formula)
-                          (replace term->literal formula)) formulas))
-
-
-         (formula (if (> (length formulas) 1)
-                      (cons 'and formulas)
-                      (first formulas)))
-
-
-         (formula (cnf formula)))
-
-    ;; please ignore this it's for debugging purposes
-    (log (hash-map literal->term (lambda (literal term)
-                                   (list literal '<=> term))))
-
-    (get-model^ term->literal literal->term formula #t)))
+              (dpllt) main
+    after preparing 'term->literal' and
+    'literal->term', and calling 'cnf'
+                        |
+                        V                  output #f, "unsat"
+          ---------> get-model                 ^
+         /      (dpllt) |                      | Yes
+         |              V                No    |
+         |           pure-literal     -------fail (dpll)
+         |       (dpll) |            /         ^
+         |              V           V          | No
+         |           get-model-guess           |
+         |      (dpllt) |                  backtrack/jump (dpll)
+         |              |                      ^  |
+         |              |                      |  | Yes
+         |              V           Yes        |  V
+         |           unit-propagate ---> get-model-check
+         |       (dpll) |                ^  (dpllt)
+         |              | No        Yes /
+         |              V              / 
+      tlearn         decide ----------/
+ (dpllt) ^       (dpll) |
+         |              | No
+         \     No       V           Yes
+          \--------- consistent? --------> output model, "sat"
+                      (euf)
 ```
 
 References
@@ -210,8 +220,3 @@ Derek C. Oppen.
 [1]:https://en.wikipedia.org/wiki/Conjunctive_normal_form
 [2]:https://dl.acm.org/doi/pdf/10.1145/1217856.1217859
 [3]:https://web.eecs.umich.edu/~weimerw/2011-6610/reading/nelson-oppen-congruence.pdf
-
-<!--
-(time (main "./input-5.smt2") (void))
-cpu time: 486906 real time: 496929 gc time: 2215
--->

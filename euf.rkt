@@ -6,7 +6,7 @@
  (only-in racket/set set mutable-set set-union set->list set-member? set-add! set-clear! for/set set-count set-add)
  (only-in racket/syntax format-symbol)
  (only-in racket/function curryr curry identity))
-(provide problem-initialize)
+(provide problem-initialize consistent?)
 
 (define idx (box 0))
 
@@ -245,3 +245,5 @@
         (let ((conflict maybe-conflict))
           (list 'unsat (first problem) conflict))
         (list 'sat (model)))))
+
+(define consistent? problem-initialize)
