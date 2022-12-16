@@ -139,9 +139,9 @@ TERM ::= VARIABLE
 equalities. So, if the program contains just the equalities $f(a,b) = a$ and
 $f(f(a,b),b) = a$, then the program will produce two hash tables.
 
-$$\text{literal}\rightarrow\text{term}\ = \\{ 1 \mapsto (f(a,b) = a), 2 \mapsto (f(f(a,b),b) = a) \\}$$
+$$\text{literal\\_to\\_term}\ = \\{ 1 \mapsto (f(a,b) = a), 2 \mapsto (f(f(a,b),b) = a) \\}$$
 
-$$\text{term}\rightarrow\text{literal}\ = \\{ (f(a,b) = a) \mapsto 1, (f(f(a,b),b) = a) \mapsto 2 \\}$$
+$$\text{term\\_to\\_literal}\ = \\{ (f(a,b) = a) \mapsto 1, (f(f(a,b),b) = a) \mapsto 2 \\}$$
 
 Here is a commented version of the function `main` from `dpllt.rkt`, which is
 the entry point to the solver.
